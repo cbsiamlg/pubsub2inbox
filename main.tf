@@ -183,35 +183,35 @@ resource "google_project_iam_member" "service-account-project" {
   member   = format("serviceAccount:%s", google_service_account.service-account[0].email)
 }
 
-resource "google_project_iam_member" "existing-service-account-project" {
-  for_each = !var.create_service_account ? toset(concat(["roles/serviceusage.serviceUsageConsumer"], local.project_permissions)) : toset([])
-  project  = var.project_id
-  role     = each.value
-  member   = format("serviceAccount:%s", var.service_account)
-}
+# resource "google_project_iam_member" "existing-service-account-project" {
+#   for_each = !var.create_service_account ? toset(concat(["roles/serviceusage.serviceUsageConsumer"], local.project_permissions)) : toset([])
+#   project  = var.project_id
+#   role     = each.value
+#   member   = format("serviceAccount:%s", var.service_account)
+# }
 
-# Add necessary project permissions to the service account in the organization
-resource "google_organization_iam_member" "service-account-org" {
-  for_each = var.create_service_account ? toset(local.org_permissions) : toset([])
-  org_id   = var.organization_id
-  role     = each.value
-  member   = format("serviceAccount:%s", google_service_account.service-account[0].email)
-}
+# # Add necessary project permissions to the service account in the organization
+# resource "google_organization_iam_member" "service-account-org" {
+#   for_each = var.create_service_account ? toset(local.org_permissions) : toset([])
+#   org_id   = var.organization_id
+#   role     = each.value
+#   member   = format("serviceAccount:%s", google_service_account.service-account[0].email)
+# }
 
-# If a helper bucket is specified, grant the service account permissions to it
-resource "google_storage_bucket_iam_member" "service-account-bucket" {
-  for_each = toset(var.create_service_account && var.helper_bucket_name != "" ? ["roles/storage.objectAdmin"] : [])
-  bucket   = var.helper_bucket_name
-  role     = each.value
-  member   = format("serviceAccount:%s", google_service_account.service-account[0].email)
-}
+# # If a helper bucket is specified, grant the service account permissions to it
+# resource "google_storage_bucket_iam_member" "service-account-bucket" {
+#   for_each = toset(var.create_service_account && var.helper_bucket_name != "" ? ["roles/storage.objectAdmin"] : [])
+#   bucket   = var.helper_bucket_name
+#   role     = each.value
+#   member   = format("serviceAccount:%s", google_service_account.service-account[0].email)
+# }
 
-resource "google_storage_bucket_iam_member" "existing-service-account-bucket" {
-  for_each = toset(!var.create_service_account && var.helper_bucket_name != "" ? ["roles/storage.objectAdmin"] : [])
-  bucket   = var.helper_bucket_name
-  role     = each.value
-  member   = format("serviceAccount:%s", var.service_account)
-}
+# resource "google_storage_bucket_iam_member" "existing-service-account-bucket" {
+#   for_each = toset(!var.create_service_account && var.helper_bucket_name != "" ? ["roles/storage.objectAdmin"] : [])
+#   bucket   = var.helper_bucket_name
+#   role     = each.value
+#   member   = format("serviceAccount:%s", var.service_account)
+# }
 
 data "google_service_account" "existing-service-account" {
   count      = !var.create_service_account && var.grant_token_creator ? 1 : 0
@@ -577,27 +577,29 @@ resource "google_cloud_run_service" "function" {
 
 # Json2Pubsub resources
 locals {
-  json2pubsub_sa = (
-    var.create_service_account ?
-    format("%s%s", (var.service_account != "" ? var.service_account : var.function_name), var.deploy_json2pubsub.suffix) :
-    format("%s%s", element(split("@", var.service_account), 0), var.deploy_json2pubsub.suffix)
-  )
+  json2pubsub_sa = split("@", var.service_account)[0]
 }
 
-resource "google_service_account" "json2pubsub-service-account" {
-  count   = var.deploy_json2pubsub.enabled ? 1 : 0
-  project = var.project_id
-
-  account_id   = local.json2pubsub_sa
-  display_name = format("%s Json2Pubsub Service Account", title(local.json2pubsub_sa))
+data "google_service_account" "json2pubsub-service-account" {
+  count      = var.deploy_json2pubsub.enabled ? 1 : 0
+  project    = var.project_id
+  account_id = local.json2pubsub_sa
 }
 
-resource "google_service_account_iam_member" "json2pubsub-service-account-user" {
-  count              = var.deploy_json2pubsub.enabled && var.deploy_json2pubsub.grant_sa_user != null ? 1 : 0
-  service_account_id = google_service_account.json2pubsub-service-account[0].name
-  role               = "roles/iam.serviceAccountUser"
-  member             = format("serviceAccount:%s", var.deploy_json2pubsub.grant_sa_user)
-}
+# resource "google_service_account" "json2pubsub-service-account" {
+#   count   = var.deploy_json2pubsub.enabled ? 1 : 0
+#   project = var.project_id
+
+#   account_id   = local.json2pubsub_sa
+#   display_name = format("%s Json2Pubsub Service Account", title(local.json2pubsub_sa))
+# }
+
+# resource "google_service_account_iam_member" "json2pubsub-service-account-user" {
+#   count              = var.deploy_json2pubsub.enabled && var.deploy_json2pubsub.grant_sa_user != null ? 1 : 0
+#   service_account_id = google_service_account.json2pubsub-service-account[0].name
+#   role               = "roles/iam.serviceAccountUser"
+#   member             = format("serviceAccount:%s", var.deploy_json2pubsub.grant_sa_user)
+# }
 
 resource "google_secret_manager_secret" "json2pubsub-message-cel" {
   count   = var.deploy_json2pubsub.enabled ? 1 : 0
@@ -671,7 +673,7 @@ resource "google_secret_manager_secret_iam_member" "json2pubsub-message-cel" {
 
   secret_id = google_secret_manager_secret.json2pubsub-message-cel[0].secret_id
   role      = "roles/secretmanager.secretAccessor"
-  member    = format("serviceAccount:%s", google_service_account.json2pubsub-service-account[0].email)
+  member    = format("serviceAccount:%s", data.google_service_account.json2pubsub-service-account[0].email)
 }
 
 resource "google_secret_manager_secret_iam_member" "json2pubsub-control-cel" {
@@ -680,7 +682,7 @@ resource "google_secret_manager_secret_iam_member" "json2pubsub-control-cel" {
 
   secret_id = google_secret_manager_secret.json2pubsub-control-cel[0].secret_id
   role      = "roles/secretmanager.secretAccessor"
-  member    = format("serviceAccount:%s", google_service_account.json2pubsub-service-account[0].email)
+  member    = format("serviceAccount:%s", data.google_service_account.json2pubsub-service-account[0].email)
 }
 
 resource "google_secret_manager_secret_iam_member" "json2pubsub-response-cel" {
@@ -689,7 +691,7 @@ resource "google_secret_manager_secret_iam_member" "json2pubsub-response-cel" {
 
   secret_id = google_secret_manager_secret.json2pubsub-response-cel[0].secret_id
   role      = "roles/secretmanager.secretAccessor"
-  member    = format("serviceAccount:%s", google_service_account.json2pubsub-service-account[0].email)
+  member    = format("serviceAccount:%s", data.google_service_account.json2pubsub-service-account[0].email)
 }
 
 resource "google_pubsub_topic_iam_member" "json2pubsub-publisher" {
@@ -698,7 +700,7 @@ resource "google_pubsub_topic_iam_member" "json2pubsub-publisher" {
 
   topic  = var.pubsub_topic
   role   = "roles/pubsub.publisher"
-  member = format("serviceAccount:%s", google_service_account.json2pubsub-service-account[0].email)
+  member    = format("serviceAccount:%s", data.google_service_account.json2pubsub-service-account[0].email)
 }
 
 resource "google_cloud_run_service" "json2pubsub-function" {
@@ -734,7 +736,7 @@ resource "google_cloud_run_service" "json2pubsub-function" {
           value = var.project_id
         }
       }
-      service_account_name  = google_service_account.json2pubsub-service-account[0].email
+      service_account_name  = data.google_service_account.json2pubsub-service-account[0].email
       container_concurrency = 1
       timeout_seconds       = var.function_timeout
     }
@@ -751,7 +753,7 @@ resource "google_cloud_run_service" "json2pubsub-function" {
   }
 
   depends_on = [
-    google_service_account_iam_member.json2pubsub-service-account-user
+    data.google_service_account.json2pubsub-service-account
   ]
 }
 
@@ -775,7 +777,7 @@ resource "google_cloudfunctions2_function" "json2pubsub-function" {
   description = "Json2Pubsub"
 
   build_config {
-    runtime     = "go120"
+    runtime     = "go122"
     entry_point = "Json2Pubsub"
     source {
       storage_source {
@@ -786,7 +788,7 @@ resource "google_cloudfunctions2_function" "json2pubsub-function" {
   }
 
   service_config {
-    service_account_email            = google_service_account.json2pubsub-service-account[0].email
+    service_account_email            = data.google_service_account.json2pubsub-service-account[0].email
     max_instance_count               = var.deploy_json2pubsub.max_instances
     available_memory                 = "256M"
     timeout_seconds                  = var.function_timeout
@@ -802,7 +804,7 @@ resource "google_cloudfunctions2_function" "json2pubsub-function" {
   }
 
   depends_on = [
-    google_service_account_iam_member.json2pubsub-service-account-user
+    data.google_service_account.json2pubsub-service-account
   ]
 }
 

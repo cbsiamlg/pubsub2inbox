@@ -86,14 +86,13 @@ variable "config" {
 variable "service_account" {
   type        = string
   description = "Service account name"
-
   default = ""
 }
 
 variable "create_service_account" {
   type        = bool
   description = "Create a service account, set false to use service_account as-is."
-  default     = true
+  default     = false
 }
 
 variable "bucket_name" {

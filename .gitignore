@@ -8,3 +8,4 @@ terraform.tfvars
 .doctrees/
 *.zip
 terraformrc
+backend.tfvars*

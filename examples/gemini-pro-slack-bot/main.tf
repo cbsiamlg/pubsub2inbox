@@ -24,6 +24,8 @@ terraform {
       version = ">= 5.20.0"
     }
   }
+
+  backend "gcs" {}
 }
 
 module "project" {
@@ -61,8 +63,8 @@ module "function" {
 
   function_name = "gemini-pro-bot"
 
-  service_account        = "gemini-pro-bot"
-  create_service_account = true
+  service_account        = var.service_account
+  create_service_account = false
 
   pubsub_topic = module.pubsub-topic.id
 
@@ -101,7 +103,7 @@ module "function" {
     container_image = null
     min_instances   = 0
     max_instances   = 10
-    grant_sa_user   = null
+    grant_sa_user   = var.service_account
   }
 }
 
@@ -133,8 +135,8 @@ module "api" {
 
   function_name = "gemini-vertex-search"
 
-  service_account        = "gemini-vertex-search"
-  create_service_account = true
+  service_account        = var.service_account
+  create_service_account = false
 
   api = {
     enabled      = true
